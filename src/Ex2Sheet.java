@@ -1,14 +1,16 @@
 import java.io.*;
-import java.util.HashSet;
 
 public class Ex2Sheet implements Sheet {
-    private Cell[][] table;
+    private final Cell[][] table; // the 2D array storing all the cells in the spreadsheet
 
-    public Ex2Sheet(int x, int y) {
-        table = new SCell[x][y];
-        for (int i = 0; i < x; i++) {
-            for (int j = 0; j < y; j++) {
-                table[i][j] = new SCell("", this); // Initialize as empty cells
+    public Ex2Sheet(int width, int height) {
+        // initialize the 2D array with specified dimensions
+        this.table = new SCell[width][height];
+
+        // initialize empty cells
+        for (int i = 0; i < width; i++) {
+            for (int j = 0; j < height; j++) {
+                table[i][j] = new SCell("", this); // empty cell with reference to this sheet
             }
         }
     }
@@ -18,47 +20,8 @@ public class Ex2Sheet implements Sheet {
     }
 
     @Override
-    public String value(int x, int y) {
-        Cell cell = get(x, y);
-        if (cell == null) {
-            return Ex2Utils.EMPTY_CELL;
-        }
-
-        // Check if the cell is a formula and evaluate it
-        if (cell.getType() == Ex2Utils.FORM) {
-            try {
-                Double result = Main.computeForm(cell.getData(), this, new HashSet<>());
-                return result.toString();
-            } catch (Exception e) {
-                return Ex2Utils.ERR_FORM; // Handle errors in formula evaluation
-            }
-        }
-
-        // For other cell types, return the stored data
-        return cell.toString();
-    }
-
-    @Override
-    public Cell get(int x, int y) {
-        if (!isIn(x, y)) {
-            throw new IllegalArgumentException("Coordinates out of bounds: (" + x + ", " + y + ")");
-        }
-        return table[x][y];
-    }
-
-    @Override
-    public Cell get(String cords) {
-        if (cords == null || cords.length() < 2) {
-            return null; // Invalid input
-        }
-        try {
-            char col = cords.charAt(0);
-            int x = col - 'A'; // convert column letter to index
-            int y = Integer.parseInt(cords.substring(1)) - 1; // convert row to index
-            return isIn(x, y) ? get(x, y) : null;
-        } catch (Exception e) {
-            return null; // handle parsing errors
-        }
+    public boolean isIn(int x, int y) {
+        return x >= 0 && x < width() && y >= 0 && y < height();
     }
 
     @Override
@@ -72,136 +35,153 @@ public class Ex2Sheet implements Sheet {
     }
 
     @Override
-    public void set(int x, int y, String s) {
+    public Cell get(int x, int y) {
         if (!isIn(x, y)) {
-            throw new IllegalArgumentException("Coordinates out of bounds: (" + x + ", " + y + ")");
+            throw new IllegalArgumentException("Cell coordinates out of bounds");
         }
-        table[x][y] = new SCell(s, this); // Create a new SCell with the given data
-    }
-
-
-    @Override
-        public void eval () {
-            for (int x = 0; x < width(); x++) {
-                for (int y = 0; y < height(); y++) {
-                    Cell cell = get(x, y);
-                    if (cell != null && cell.getType() == Ex2Utils.FORM) {
-                        try {
-                            Main.computeForm(cell.getData(), this, new HashSet<>());
-                        } catch (Exception e) {
-                            cell.setType(Ex2Utils.ERR_FORM_FORMAT);
-                        }
-                    }
-                }
-            }
-        }
-    @Override
-    public boolean isIn(int xx, int yy) {
-        return xx >= 0 && yy >= 0 && xx < width() && yy < height();
+        return table[x][y];
     }
 
     @Override
-    public int[][] depth() {
-        int[][] depthMap = new int[width()][height()];
-        boolean[][] visited = new boolean[width()][height()]; // tracks visited cells to prevent cycles
-        for (int x = 0; x < width(); x++) {
-            for (int y = 0; y < height(); y++) {
-                if (!visited[x][y]) {
-                    depthMap[x][y] = calculateDepth(x, y, visited, depthMap);
-                }
-            }
+    public Cell get(String coord) {
+        if (coord == null || coord.length() < 2) {
+            return null;
         }
-        return depthMap;
-    }
-
-    // helper method to calculateDepth: since for some reason i crash when i do it inside depth we try it here
-    private int calculateDepth(int x, int y, boolean[][] visited, int[][] depthMap) {
-        if (visited[x][y]) {
-            return -1; // value for cell references
-        }
-        visited[x][y] = true;
-
-        Cell cell = get(x, y);
-        if (cell == null || cell.getType() == Ex2Utils.TEXT || cell.getType() == Ex2Utils.NUMBER) {
-            return 0; // No dependencies
-        }
-
-        if (cell.getType() == Ex2Utils.FORM) {
-            String formula = cell.getData().substring(1); // remove the =
-            String[] references = extractCellReferences(formula); // extract the cell reference
-            int maxDepth = 0;
-
-            for (String ref : references) {
-                Cell refCell = get(ref);
-                if (refCell != null) {
-                    int[] coords = parseCellRef(ref);
-                    maxDepth = Math.max(maxDepth, calculateDepth(coords[0], coords[1], visited, depthMap));
-                }
-            }
-            depthMap[x][y] = maxDepth + 1;
-        }
-        visited[x][y] = false;
-        return depthMap[x][y];
-    }
-
-    private String[] extractCellReferences(String formula) {
-        return formula.split("[^A-Za-z0-9]"); // MIGHT BE A PROBLEM
-    }
-
-    private int[] parseCellRef(String ref) {
-        char col = ref.charAt(0);
-        int x = col - 'A';
-        int y = Integer.parseInt(ref.substring(1)) - 1;
-        return new int[]{x, y};
-    }
-
-    @Override
-    public void load(String fileName) throws IOException {
-        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
-            for (int x = 0; x < width(); x++) {
-                String line = br.readLine();
-                if (line == null) break;
-                String[] cells = line.split(",");
-                for (int y = 0; y < Math.min(cells.length, height()); y++) {
-                    set(x, y, cells[y]);
-                }
-            }
+        try {
+            // convert letter to number (A=0, B=1, etc...)
+            int x = Character.toUpperCase(coord.charAt(0)) - 'A';
+            // convert string number to int
+            int y = Integer.parseInt(coord.substring(1));
+            return isIn(x, y) ? get(x, y) : null;
+        } catch (Exception e) {
+            return null; // return null for any parsing errors
         }
     }
 
     @Override
-    public void save(String fileName) throws IOException {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(fileName))) {
-            for (int x = 0; x < width(); x++) {
-                StringBuilder sb = new StringBuilder();
-                for (int y = 0; y < height(); y++) {
-                    sb.append(get(x, y).getData());
-                    if (y < height() - 1) sb.append(",");
-                }
-                bw.write(sb.toString());
-                bw.newLine();
-            }
+    public void set(int x, int y, String str) {
+        if (!isIn(x, y)) {
+            throw new IllegalArgumentException("Cell coordinates out of bounds");
         }
+        table[x][y] = new SCell(str, this); // create new cell with content
+    }
+
+    @Override
+    public String value(int x, int y) {
+        return eval(x, y);
     }
 
     @Override
     public String eval(int x, int y) {
-        Cell cell = get(x, y);
-        if (cell == null || cell.getData().isEmpty()) {
-            return Ex2Utils.EMPTY_CELL;
+        if (!isIn(x, y)) {
+            return "";
+        }
+        return table[x][y].toString(); // use cell toString for evaluation
+    }
+
+    @Override
+    public void eval() {
+        for (int i = 0; i < width(); i++) {
+            for (int j = 0; j < height(); j++) {
+                eval(i, j);
+            }
+        }
+    }
+    // calculates depth matrix for formula dependencies
+    // used to detect circular references and evaluate formulas in correct order
+    @Override
+    public int[][] depth() {
+        int[][] depths = new int[width()][height()];
+        for (int i = 0; i < width(); i++) {
+            for (int j = 0; j < height(); j++) {
+                depths[i][j] = calculateDepth(i, j, new boolean[width()][height()]);
+            }
+        }
+        return depths;
+    }
+
+    // recursive helper method to calculate cell dependency depth
+    private int calculateDepth(int x, int y, boolean[][] visited) {
+        if (visited[x][y]) {
+            return Ex2Utils.ERR;
         }
 
-        if (cell.getType() == Ex2Utils.NUMBER || cell.getType() == Ex2Utils.TEXT) {
-            return cell.getData();
-        } else if (cell.getType() == Ex2Utils.FORM) {
-            try {
-                Double result = Main.computeForm(cell.getData(), this, new HashSet<>());
-                return result.toString();
-            } catch (Exception e) {
-                return Ex2Utils.ERR_FORM;
+        Cell cell = get(x, y);
+        if (cell.getType() != Ex2Utils.FORM) {
+            return 0;
+        }
+
+        visited[x][y] = true;
+        int maxDepth = 0;
+
+        String data = cell.getData();
+        if (data.startsWith("=")) {
+            String formula = data.substring(1).trim();
+
+            // handle negative sign
+            if (formula.startsWith("-")) { // handles negative sign ath the start of the formula
+                formula = formula.substring(1).trim();
+            }
+
+            if (formula.matches("[A-Za-z]\\d+")) {
+                Cell referenced = get(formula);
+                if (referenced != null) { // convert the reference into cords
+                    int refX = formula.toUpperCase().charAt(0) - 'A';
+                    int refY = Integer.parseInt(formula.substring(1));
+                    int depth = calculateDepth(refX, refY, visited);
+                    if (depth == Ex2Utils.ERR) {
+                        visited[x][y] = false;
+                        return Ex2Utils.ERR;
+                    }
+                    maxDepth = Math.max(maxDepth, depth + 1);
+                }
             }
         }
 
-        return Ex2Utils.ERR_FORM;
+        visited[x][y] = false; // unmark visited cells and return
+        return maxDepth;
+    }
+
+    @Override
+    public void save(String filename) throws IOException {
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filename))) {
+            for (int y = 0; y < height(); y++) {
+                for (int x = 0; x < width(); x++) {
+                    String value = table[x][y].getData();
+                    if (!value.isEmpty()) {
+                        writer.write(x + "," + y + "," + value);
+                        writer.newLine();
+                    }
+                }
+            }
+        }
+    }
+
+    @Override
+    public void load(String filename) throws IOException {
+        // clear current table
+        for (int i = 0; i < width(); i++) {
+            for (int j = 0; j < height(); j++) {
+                table[i][j] = new SCell("", this);
+            }
+        }
+
+        try (BufferedReader reader = new BufferedReader(new FileReader(filename))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(",");
+                if (parts.length >= 3) {
+                    try {
+                        int x = Integer.parseInt(parts[0]);
+                        int y = Integer.parseInt(parts[1]);
+                        if (isIn(x, y)) {
+                            set(x, y, parts[2]);
+                        }
+                    } catch (NumberFormatException ignored) {
+                        // skip invalid lines
+                    }
+                }
+            }
+        }
     }
 }

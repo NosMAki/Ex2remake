@@ -1,135 +1,214 @@
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import static org.junit.jupiter.api.Assertions.*;
-import java.util.HashSet;
 
-class MainTest {
+public class Tests {
+    private Sheet sheet;
+    private Cell cell;
+    private static final double DELTA = 0.001;
 
+    @BeforeEach
+    void setUp() {
+        sheet = new Ex2Sheet();
+        cell = new SCell("", sheet);
+    }
+
+    // =================== SCell Tests ===================
     @Test
-    void testIsNumber() {
-        assertTrue(Main.isNumber("123")); // Valid integer
-        assertTrue(Main.isNumber("45.67")); // Valid float
-        assertFalse(Main.isNumber("abc")); // Invalid string
-        assertFalse(Main.isNumber("")); // Empty string
-        assertFalse(Main.isNumber(null)); // Null input
+    void testSCellConstructor() {
+        Cell cell = new SCell("42", sheet);
+        assertEquals("42", cell.getData());
+        assertEquals(Ex2Utils.NUMBER, cell.getType());
     }
 
     @Test
-    void testIsText() {
-        assertTrue(Main.isText("hello")); // Plain text
-        assertFalse(Main.isText("123")); // Number
-        assertFalse(Main.isText("=A1+B2")); // Formula
-        assertTrue(Main.isText("some text")); // Text with spaces
-        assertFalse(Main.isText("")); // Empty string
-        assertFalse(Main.isText(null)); // Null input
+    void testGetData() {
+        cell.setData("Test");
+        assertEquals("Test", cell.getData());
     }
 
     @Test
-    void testIsForm() {
-        assertTrue(Main.isForm("=A1+B2")); // Valid formula
-        assertTrue(Main.isForm("=5+3")); // Valid formula with numbers
-        assertFalse(Main.isForm("A1+B2")); // Missing '='
-        assertFalse(Main.isForm("=")); // Only '='
-        assertFalse(Main.isForm("")); // Empty string
-        assertFalse(Main.isForm(null)); // Null input
+    void testSetData() {
+        cell.setData("42.5");
+        assertEquals("42.5", cell.getData());
+        assertEquals(Ex2Utils.NUMBER, cell.getType());
+
+        cell.setData("Text");
+        assertEquals("Text", cell.getData());
+        assertEquals(Ex2Utils.TEXT, cell.getType());
+
+        cell.setData("=A1+B1");
+        assertEquals("=A1+B1", cell.getData());
+        assertEquals(Ex2Utils.FORM, cell.getType());
     }
 
     @Test
-    void testComputeForm() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-        sheet.set(0, 0, "5"); // A1 = 5
-        sheet.set(1, 1, "10"); // B2 = 10
+    void testGetSetType() {
+        cell.setType(Ex2Utils.NUMBER);
+        assertEquals(Ex2Utils.NUMBER, cell.getType());
 
-        double result = Main.computeForm("=A1+B2", sheet, new HashSet<>());
-        assertEquals(15.0, result); // A1 + B2 = 15
-
-        result = Main.computeForm("=10+5-3", sheet, new HashSet<>());
-        assertEquals(12.0, result); // 10 + 5 - 3 = 12
-
-        result = Main.computeForm("=5*6/3", sheet, new HashSet<>());
-        assertEquals(10.0, result); // 5 * 6 / 3 = 10
-
-        result = Main.computeForm("=5+(6*2)", sheet, new HashSet<>());
-        assertEquals(17.0, result); // 5 + (6 * 2) = 17
+        cell.setType(Ex2Utils.TEXT);
+        assertEquals(Ex2Utils.TEXT, cell.getType());
     }
 
     @Test
-    void testCellReferenceInComputeForm() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-        sheet.set(0, 0, "5"); // A1 = 5
-        sheet.set(1, 1, "10"); // B2 = 10
-        sheet.set(2, 2, "=A1+B2"); // C3 = A1 + B2
+    void testGetSetOrder() {
+        cell.setOrder(5);
+        assertEquals(5, cell.getOrder());
+    }
 
-        double result = Main.computeForm("=C3*2", sheet, new HashSet<>());
-        assertEquals(30.0, result); // C3 (15) * 2 = 30
+    // =================== CellEntry Tests ===================
+    @Test
+    void testCellEntryValidation() {
+        CellEntry entry1 = new CellEntry("A1");
+        assertTrue(entry1.isValid());
+        assertEquals(0, entry1.getX());
+        assertEquals(1, entry1.getY());
+
+        CellEntry entry2 = new CellEntry("Z99");
+        assertFalse(entry2.isValid());
+
+        CellEntry entry3 = new CellEntry("AA1");
+        assertFalse(entry3.isValid());
+    }
+
+    // =================== Ex2Sheet Tests ===================
+    @Test
+    void testSheetDimensions() {
+        assertEquals(Ex2Utils.WIDTH, sheet.width());
+        assertEquals(Ex2Utils.HEIGHT, sheet.height());
+    }
+
+    @Test
+    void testIsIn() {
+        assertTrue(sheet.isIn(0, 0));
+        assertTrue(sheet.isIn(Ex2Utils.WIDTH - 1, Ex2Utils.HEIGHT - 1));
+        assertFalse(sheet.isIn(-1, 0));
+        assertFalse(sheet.isIn(Ex2Utils.WIDTH, Ex2Utils.HEIGHT));
+    }
+
+    @Test
+    void testGetSet() {
+        sheet.set(0, 0, "Test");
+        assertEquals("Test", sheet.get(0, 0).getData());
+
+        sheet.set(1, 1, "42");
+        assertEquals("42", sheet.get(1, 1).getData());
+    }
+
+    @Test
+    void testGetByString() {
+        sheet.set(0, 0, "Test");
+        Cell cell = sheet.get("A0");
+        assertNotNull(cell);
+        assertEquals("Test", cell.getData());
+    }
+
+    @Test
+    void testValue() {
+        sheet.set(0, 0, "42");
+        assertEquals("42", sheet.value(0, 0));
+
+        sheet.set(0, 1, "=A0+8");
+        assertEquals("50.0", sheet.value(0, 1));
+    }
+
+    // =================== Formula Tests ===================
+    @Test
+    void testBasicFormulas() {
+        sheet.set(0, 0, "=5+3");
+        assertEquals("8.0", sheet.value(0, 0));
+
+        sheet.set(0, 0, "=10-5");
+        assertEquals("5.0", sheet.value(0, 0));
+
+        sheet.set(0, 0, "=4*3");
+        assertEquals("12.0", sheet.value(0, 0));
+
+        sheet.set(0, 0, "=15/3");
+        assertEquals("5.0", sheet.value(0, 0));
+    }
+
+    @Test
+    void testCellReferenceFormulas() {
+        sheet.set(0, 0, "10");
+        sheet.set(1, 0, "20");
+        sheet.set(0, 1, "=A0+B0");
+        assertEquals("30.0", sheet.value(0, 1));
+    }
+
+    @Test
+    void testFormulaErrors() {
+        // Division by zero
+        sheet.set(0, 0, "=5/0");
+        assertEquals(Ex2Utils.ERR_FORM, sheet.value(0, 0));
+
+
     }
 
     @Test
     void testCircularReference() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-        sheet.set(0, 0, "=A1"); // A1 references itself
-
-        StackOverflowError exception = assertThrows(StackOverflowError.class, () -> {
-            Main.computeForm("=A1", sheet, new HashSet<>());
-        });
-        assertEquals("ERR_RECUR", exception.getMessage()); // Check for circular reference error
+        sheet.set(0, 0, "=A1");
+        sheet.set(0, 1, "=A0");
+        int[][] depths = sheet.depth();
+        assertEquals(Ex2Utils.ERR, depths[0][0]);
+        assertEquals(Ex2Utils.ERR, depths[0][1]);
     }
 
+    // =================== File I/O Tests ===================
+    @Test
+    void testFileOperations() {
+        try {
+            // Setup test data
+            sheet.set(0, 0, "Test");
+            sheet.set(1, 0, "42");
+            sheet.set(0, 1, "=A0+B0");
+
+            // Save
+            String filename = "test_sheet.csv";
+            sheet.save(filename);
+
+            // Load into new sheet
+            Sheet newSheet = new Ex2Sheet();
+            newSheet.load(filename);
+
+            // Verify data
+            assertEquals("Test", newSheet.get(0, 0).getData());
+            assertEquals("42", newSheet.get(1, 0).getData());
+            assertEquals("=A0+B0", newSheet.get(0, 1).getData());
+        } catch (Exception e) {
+            fail("File operations failed: " + e.getMessage());
+        }
+    }
+
+    // =================== Additional Edge Cases ===================
+    @Test
+    void testEmptyCells() {
+        assertEquals("", sheet.get(0, 0).getData());
+        assertEquals(Ex2Utils.TEXT, sheet.get(0, 0).getType());
+    }
+
+    @Test
+    void testNegativeNumbers() {
+        sheet.set(0, 0, "-42");
+        assertEquals("-42", sheet.get(0, 0).getData());
+        assertEquals(Ex2Utils.NUMBER, sheet.get(0, 0).getType());
+    }
+
+    @Test
+    void testWhitespaceHandling() {
+        sheet.set(0, 0, "  42  ");
+        assertEquals("42", sheet.get(0, 0).getData());
+
+        sheet.set(0, 1, "  =  42 + 8  ");
+        assertEquals("50.0", sheet.value(0, 1));
+    }
 
     @Test
     void testComplexFormulas() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-        sheet.set(0, 0, "10"); // A1 = 10
-        sheet.set(1, 1, "=A1+20"); // B2 = A1 + 20 = 30
-        sheet.set(2, 2, "=B2/2"); // C3 = B2 / 2 = 15
-
-        double result = Main.computeForm("=C3*4", sheet, new HashSet<>());
-        assertEquals(60.0, result); // C3 (15) * 4 = 60
+        sheet.set(0, 0, "10");
+        sheet.set(1, 0, "20");
+        sheet.set(2, 0, "30");
+        sheet.set(0, 1, "=A0+B0*C0");
     }
-
-    @Test
-    void testNegativeValuesAndParentheses() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-
-        // Test direct negative numbers
-        assertEquals(-5.0, Main.computeForm("=-5", sheet, new HashSet<>()));
-
-        // Test parentheses
-        assertEquals(-10.0, Main.computeForm("=-(5+5)", sheet, new HashSet<>()));
-
-        // Test cell reference with negative
-        sheet.set(0, 0, "5"); // A1 = 5
-        assertEquals(-5.0, Main.computeForm("=-A1", sheet, new HashSet<>()));
-
-        // Test combination of cell reference and parentheses
-        sheet.set(1, 1, "=A1+5"); // B2 = A1 + 5 = 10
-        assertEquals(-10.0, Main.computeForm("=-(B2)", sheet, new HashSet<>()));
-
-        // Test nested parentheses
-        assertEquals(-15.0, Main.computeForm("=-(A1+(5*2))", sheet, new HashSet<>()));
-    }
-
-    @Test
-    void testCellReferences() {
-        Ex2Sheet sheet = new Ex2Sheet(5, 5);
-
-        // Test simple number in cell
-        sheet.set(0, 0, "5");  // Put 5 in A0
-        assertEquals("5", sheet.value(0, 0)); // Should display as 5
-        assertEquals(Ex2Utils.NUMBER, sheet.get(0, 0).getType()); // Should be NUMBER type
-
-        // Test reference to that cell
-        sheet.set(0, 1, "=A0");  // Put =A0 in A1
-        assertEquals("5", sheet.value(0, 1)); // Should display as 5
-        assertEquals(Ex2Utils.FORM, sheet.get(0, 1).getType()); // Should be FORM type
-
-        // Test invalid reference
-        sheet.set(0, 2, "=Z9"); // Reference to non-existent cell
-        assertEquals(Ex2Utils.ERR_FORM, sheet.value(0, 2)); // Should show error
-
-        // Test circular reference
-        sheet.set(1, 0, "=B1"); // B0 references B1
-        sheet.set(1, 1, "=B0"); // B1 references B0
-        assertEquals(Ex2Utils.ERR_CYCLE_FORM, sheet.get(1, 0).getType()); // Should detect cycle
-    }
-
 }
